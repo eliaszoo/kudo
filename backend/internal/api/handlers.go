@@ -1,12 +1,13 @@
 package api
 
 import (
-	"net/http"
-	"reward-system/internal/db"
-	"reward-system/internal/services"
+    "fmt"
+    "net/http"
+    "reward-system/internal/db"
+    "reward-system/internal/services"
 
-	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
+    "github.com/gin-gonic/gin"
+    "gorm.io/gorm"
 )
 
 func CreateRewardType(database *gorm.DB) gin.HandlerFunc {
@@ -37,6 +38,127 @@ func CreateRewardType(database *gorm.DB) gin.HandlerFunc {
 
 		c.JSON(http.StatusOK, gin.H{"code": 0, "data": rewardType})
 	}
+}
+
+func ListRewardTypes(database *gorm.DB) gin.HandlerFunc {
+    return func(c *gin.Context) {
+        familyID := c.Query("family_id")
+        var types []db.RewardType
+        tx := database
+        if familyID != "" {
+            tx = tx.Where("family_id = ?", parseUint(familyID))
+        }
+        if err := tx.Order("id ASC").Find(&types).Error; err != nil {
+            c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "Failed to list reward types"})
+            return
+        }
+        c.JSON(http.StatusOK, gin.H{"code": 0, "data": types})
+    }
+}
+
+func UpdateRewardType(database *gorm.DB) gin.HandlerFunc {
+    return func(c *gin.Context) {
+        id := c.Param("id")
+        var req struct {
+            Name      *string `json:"name"`
+            UnitKind  *string `json:"unit_kind"`
+            UnitLabel *string `json:"unit_label"`
+        }
+        if err := c.ShouldBindJSON(&req); err != nil {
+            c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+            return
+        }
+        updates := map[string]interface{}{}
+        if req.Name != nil { updates["name"] = *req.Name }
+        if req.UnitKind != nil { updates["unit_kind"] = *req.UnitKind }
+        if req.UnitLabel != nil { updates["unit_label"] = *req.UnitLabel }
+        if err := database.Model(&db.RewardType{}).Where("id = ?", id).Updates(updates).Error; err != nil {
+            c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "Failed to update reward type"})
+            return
+        }
+        var rt db.RewardType
+        if err := database.First(&rt, id).Error; err != nil {
+            c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "Failed to load reward type"})
+            return
+        }
+        c.JSON(http.StatusOK, gin.H{"code": 0, "data": rt})
+    }
+}
+
+func ListFamilies(database *gorm.DB) gin.HandlerFunc {
+    return func(c *gin.Context) {
+        var families []db.Family
+        if err := database.Order("id ASC").Find(&families).Error; err != nil {
+            c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "Failed to list families"})
+            return
+        }
+        c.JSON(http.StatusOK, gin.H{"code": 0, "data": families})
+    }
+}
+
+func CreateFamily(database *gorm.DB) gin.HandlerFunc {
+    return func(c *gin.Context) {
+        var req struct {
+            Name string `json:"name" binding:"required"`
+        }
+        if err := c.ShouldBindJSON(&req); err != nil {
+            c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+            return
+        }
+        family := &db.Family{Name: req.Name}
+        if err := database.Create(family).Error; err != nil {
+            c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "Failed to create family"})
+            return
+        }
+        c.JSON(http.StatusOK, gin.H{"code": 0, "data": family})
+    }
+}
+
+func ListUsers(database *gorm.DB) gin.HandlerFunc {
+    return func(c *gin.Context) {
+        familyID := c.Query("family_id")
+        var users []db.User
+        tx := database
+        if familyID != "" {
+            tx = tx.Where("family_id = ?", parseUint(familyID))
+        }
+        if err := tx.Order("id ASC").Find(&users).Error; err != nil {
+            c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "Failed to list users"})
+            return
+        }
+        c.JSON(http.StatusOK, gin.H{"code": 0, "data": users})
+    }
+}
+
+func CreateUser(database *gorm.DB) gin.HandlerFunc {
+    return func(c *gin.Context) {
+        var req struct {
+            FamilyID    uint64 `json:"family_id" binding:"required"`
+            Role        string `json:"role" binding:"required,oneof=guardian child"`
+            DisplayName string `json:"display_name" binding:"required"`
+        }
+        if err := c.ShouldBindJSON(&req); err != nil {
+            c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+            return
+        }
+        user := &db.User{FamilyID: req.FamilyID, Role: req.Role, DisplayName: req.DisplayName, IsActive: true}
+        if err := database.Create(user).Error; err != nil {
+            c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "Failed to create user"})
+            return
+        }
+        c.JSON(http.StatusOK, gin.H{"code": 0, "data": user})
+    }
+}
+
+func DeleteUser(database *gorm.DB) gin.HandlerFunc {
+    return func(c *gin.Context) {
+        id := c.Param("id")
+        if err := database.Delete(&db.User{}, id).Error; err != nil {
+            c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "Failed to delete user"})
+            return
+        }
+        c.JSON(http.StatusOK, gin.H{"code": 0})
+    }
 }
 
 func GrantReward(database *gorm.DB) gin.HandlerFunc {

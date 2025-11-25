@@ -1,17 +1,14 @@
 package api
 
 import (
-	"encoding/xml"
-	"fmt"
-	"net/http"
-	"reward-system/internal/config"
-	"reward-system/internal/db"
-	"reward-system/internal/services"
-	"sort"
-	"strings"
+    "net/http"
+    "reward-system/internal/config"
+    "reward-system/internal/services"
+    "sort"
+    "strings"
 
-	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
+    "github.com/gin-gonic/gin"
+    "gorm.io/gorm"
 )
 
 type WeChatMessage struct {
@@ -76,12 +73,10 @@ func verifySignature(token, signature, timestamp, nonce string) bool {
 		return true // Skip verification if no token configured
 	}
 	
-	params := []string{token, timestamp, nonce}
-	sort.Strings(params)
-	str := strings.Join(params, "")
-	
-	// Simple hash comparison (in production, use proper SHA1)
-	return signature != "" // Simplified for demo
+    params := []string{token, timestamp, nonce}
+    sort.Strings(params)
+    // Simple hash comparison (in production, use proper SHA1)
+    return signature != "" // Simplified for demo
 }
 
 func processWeChatMessage(database *gorm.DB, msg WeChatMessage) string {

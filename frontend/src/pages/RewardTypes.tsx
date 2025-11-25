@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useFamilyStore } from '../stores/familyStore'
-import { Plus, Edit, Trash2, DollarSign, Clock, Star } from 'lucide-react'
+import { Plus, Edit, Trash2, DollarSign, Clock, Star, Gift } from 'lucide-react'
 import { toast } from 'sonner'
 
 export default function RewardTypes() {
-  const { rewardTypes, loading, fetchRewardTypes, createRewardType } = useFamilyStore()
+  const { rewardTypes, loading, fetchRewardTypes, createRewardType, currentFamily } = useFamilyStore()
+  const [editTarget, setEditTarget] = useState<any|null>(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
@@ -13,9 +14,10 @@ export default function RewardTypes() {
   })
 
   useEffect(() => {
-    // Mock current family ID
-    fetchRewardTypes(1)
-  }, [fetchRewardTypes])
+    if (currentFamily?.id) {
+      fetchRewardTypes(currentFamily.id)
+    }
+  }, [currentFamily, fetchRewardTypes])
 
   const getUnitIcon = (unitKind: string) => {
     switch (unitKind) {
@@ -53,7 +55,7 @@ export default function RewardTypes() {
 
     try {
       await createRewardType({
-        family_id: 1, // Mock family ID
+        family_id: currentFamily?.id,
         name: formData.name,
         unit_kind: formData.unit_kind,
         unit_label: formData.unit_label,
@@ -119,7 +121,7 @@ export default function RewardTypes() {
                 
                 <div className="flex items-center space-x-2">
                   <button
-                    onClick={() => toast.success('编辑功能开发中...')}
+                    onClick={() => openEdit(type)}
                     className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
                   >
                     <Edit className="h-4 w-4" />
@@ -211,3 +213,47 @@ export default function RewardTypes() {
     </div>
   )
 }
+  const [editForm, setEditForm] = useState({ name:'', unit_kind:'money' as 'money'|'time'|'points'|'custom', unit_label:'' })
+
+  const openEdit = (type:any) => {
+    setEditTarget(type)
+    setEditForm({ name:type.name, unit_kind:type.unit_kind, unit_label:type.unit_label || '' })
+  }
+
+  const updateRewardType = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editTarget) return
+    try {
+      const res = await api.patch(`/reward_types/${editTarget.id}`, { name: editForm.name, unit_kind: editForm.unit_kind, unit_label: editForm.unit_label })
+      const updated = res.data.data
+      const newList = rewardTypes.map(rt => rt.id === updated.id ? updated : rt)
+      ;(useFamilyStore as any).setState({ rewardTypes: newList })
+      toast.success('更新成功')
+      setEditTarget(null)
+    } catch (err) {
+      toast.error('更新失败')
+    }
+  }
+      {editTarget && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">编辑奖励类型</h2>
+            <form onSubmit={updateRewardType} className="space-y-4">
+              <input className="w-full px-3 py-2 border border-gray-300 rounded-md" value={editForm.name} onChange={(e)=>setEditForm({...editForm, name:e.target.value})} />
+              <select className="w-full px-3 py-2 border border-gray-300 rounded-md" value={editForm.unit_kind} onChange={(e)=>setEditForm({...editForm, unit_kind: e.target.value as any})}>
+                <option value="money">货币（元）</option>
+                <option value="time">时间（分钟）</option>
+                <option value="points">积分</option>
+                <option value="custom">自定义</option>
+              </select>
+              {editForm.unit_kind === 'custom' && (
+                <input className="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="自定义单位" value={editForm.unit_label} onChange={(e)=>setEditForm({...editForm, unit_label: e.target.value})} />
+              )}
+              <div className="flex space-x-3">
+                <button type="button" className="flex-1 px-4 py-2 border border-gray-300 rounded-md" onClick={()=>setEditTarget(null)}>取消</button>
+                <button type="submit" className="flex-1 px-4 py-2 bg-primary-500 text-white rounded-md">保存</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}

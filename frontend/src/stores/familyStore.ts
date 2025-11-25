@@ -42,11 +42,15 @@ interface FamilyStore {
   fetchBalance: (childId: number, rewardTypeId: number) => Promise<void>
   createFamily: (name: string) => Promise<void>
   createRewardType: (data: any) => Promise<void>
+  addChild: (familyId: number, displayName: string) => Promise<void>
+  deleteChild: (userId: number) => Promise<void>
+  grantReward: (familyId: number, childId: number, rewardTypeId: number, value: number, note?: string) => Promise<{transaction_id:number,new_balance:number} | null>
+  spendReward: (familyId: number, childId: number, rewardTypeId: number, value: number, note?: string) => Promise<{transaction_id:number,new_balance:number} | null>
 }
 
 const API_BASE = '/api/v1'
 
-const api = axios.create({
+export const api = axios.create({
   baseURL: API_BASE,
   headers: {
     'Authorization': `Bearer ${localStorage.getItem('token') || ''}`,
@@ -66,11 +70,15 @@ export const useFamilyStore = create<FamilyStore>((set, get) => ({
   fetchFamilies: async () => {
     set({ loading: true, error: null })
     try {
-      // Mock data for now
-      const mockFamilies: Family[] = [
-        { id: 1, name: '我的家庭', created_at: new Date().toISOString() },
-      ]
-      set({ families: mockFamilies, currentFamily: mockFamilies[0] || null })
+      const res = await api.get('/families')
+      const families: Family[] = res.data.data || []
+      let current = families[0] || null
+      if (families.length > 0) {
+        // Prefer a demo family with data
+        const preferred = families.find(f => /张|李/.test(f.name)) || families[0]
+        current = preferred
+      }
+      set({ families, currentFamily: current })
     } catch (error) {
       set({ error: '获取家庭信息失败' })
     } finally {
@@ -81,12 +89,9 @@ export const useFamilyStore = create<FamilyStore>((set, get) => ({
   fetchUsers: async (familyId: number) => {
     set({ loading: true, error: null })
     try {
-      // Mock data for now
-      const mockUsers: User[] = [
-        { id: 1, family_id: familyId, role: 'guardian', display_name: '爸爸', is_active: true },
-        { id: 2, family_id: familyId, role: 'child', display_name: '小明', is_active: true },
-      ]
-      set({ users: mockUsers })
+      const res = await api.get('/users', { params: { family_id: familyId } })
+      const users: User[] = res.data.data || []
+      set({ users })
     } catch (error) {
       set({ error: '获取用户信息失败' })
     } finally {
@@ -97,12 +102,9 @@ export const useFamilyStore = create<FamilyStore>((set, get) => ({
   fetchRewardTypes: async (familyId: number) => {
     set({ loading: true, error: null })
     try {
-      // Mock data for now
-      const mockRewardTypes: RewardType[] = [
-        { id: 1, family_id: familyId, name: '零花钱', unit_kind: 'money', unit_label: '元' },
-        { id: 2, family_id: familyId, name: '看电视时间', unit_kind: 'time', unit_label: '分钟' },
-      ]
-      set({ rewardTypes: mockRewardTypes })
+      const res = await api.get('/reward_types', { params: { family_id: familyId } })
+      const rewardTypes: RewardType[] = res.data.data || []
+      set({ rewardTypes })
     } catch (error) {
       set({ error: '获取奖励类型失败' })
     } finally {
@@ -112,8 +114,11 @@ export const useFamilyStore = create<FamilyStore>((set, get) => ({
 
   fetchBalance: async (childId: number, rewardTypeId: number) => {
     try {
-      // Mock balance for now
-      const balance = { balance: Math.floor(Math.random() * 1000) }
+      const state = get()
+      const familyId = state.currentFamily?.id
+      if (!familyId) return
+      const res = await api.get('/balances', { params: { family_id: familyId, child_id: childId, reward_type_id: rewardTypeId } })
+      const balance = res.data.data || { balance: 0 }
       set(state => ({
         balances: {
           ...state.balances,
@@ -128,15 +133,11 @@ export const useFamilyStore = create<FamilyStore>((set, get) => ({
   createFamily: async (name: string) => {
     set({ loading: true, error: null })
     try {
-      // Mock creation
-      const newFamily: Family = {
-        id: Date.now(),
-        name,
-        created_at: new Date().toISOString(),
-      }
+      const res = await api.post('/families', { name })
+      const created: Family = res.data.data
       set(state => ({
-        families: [...state.families, newFamily],
-        currentFamily: newFamily,
+        families: [...state.families, created],
+        currentFamily: created,
       }))
     } catch (error) {
       set({ error: '创建家庭失败' })
@@ -148,21 +149,60 @@ export const useFamilyStore = create<FamilyStore>((set, get) => ({
   createRewardType: async (data: any) => {
     set({ loading: true, error: null })
     try {
-      // Mock creation
-      const newRewardType: RewardType = {
-        id: Date.now(),
-        family_id: data.family_id,
-        name: data.name,
-        unit_kind: data.unit_kind,
-        unit_label: data.unit_label,
-      }
+      const res = await api.post('/reward_types', data)
+      const created: RewardType = res.data.data
       set(state => ({
-        rewardTypes: [...state.rewardTypes, newRewardType],
+        rewardTypes: [...state.rewardTypes, created],
       }))
     } catch (error) {
       set({ error: '创建奖励类型失败' })
     } finally {
       set({ loading: false })
+    }
+  },
+
+  addChild: async (familyId: number, displayName: string) => {
+    set({ loading: true, error: null })
+    try {
+      const res = await api.post('/users', { family_id: familyId, role: 'child', display_name: displayName })
+      const user: User = res.data.data
+      set(state => ({ users: [...state.users, user] }))
+    } catch (error) {
+      set({ error: '添加孩子失败' })
+    } finally {
+      set({ loading: false })
+    }
+  },
+
+  deleteChild: async (userId: number) => {
+    set({ loading: true, error: null })
+    try {
+      await api.delete(`/users/${userId}`)
+      set(state => ({ users: state.users.filter(u => u.id !== userId) }))
+    } catch (error) {
+      set({ error: '删除孩子失败' })
+    } finally {
+      set({ loading: false })
+    }
+  },
+
+  grantReward: async (familyId, childId, rewardTypeId, value, note) => {
+    try {
+      const res = await api.post('/rewards/grant', { family_id: familyId, child_id: childId, reward_type_id: rewardTypeId, value, note, idempotency_key: `grant-${childId}-${rewardTypeId}-${Date.now()}` })
+      return res.data.data
+    } catch (error) {
+      set({ error: '授予奖励失败' })
+      return null
+    }
+  },
+
+  spendReward: async (familyId, childId, rewardTypeId, value, note) => {
+    try {
+      const res = await api.post('/rewards/spend', { family_id: familyId, child_id: childId, reward_type_id: rewardTypeId, value, note, idempotency_key: `spend-${childId}-${rewardTypeId}-${Date.now()}` })
+      return res.data.data
+    } catch (error) {
+      set({ error: '消费奖励失败' })
+      return null
     }
   },
 }))

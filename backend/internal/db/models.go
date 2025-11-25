@@ -25,32 +25,28 @@ type User struct {
 }
 
 type RewardType struct {
-	ID        uint64    `gorm:"primaryKey;autoIncrement" json:"id"`
-	FamilyID  uint64    `gorm:"not null;index" json:"family_id"`
-	Name      string    `gorm:"size:64;not null" json:"name"`
-	UnitKind  string    `gorm:"type:enum('money','time','points','custom');not null" json:"unit_kind"`
-	UnitLabel string    `gorm:"size:32" json:"unit_label,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	
-	Family Family `gorm:"foreignKey:FamilyID" json:"family,omitempty"`
-	
-	gorm:"uniqueIndex:uniq_family_name,composite:(family_id,name)"
+    ID        uint64    `gorm:"primaryKey;autoIncrement" json:"id"`
+    FamilyID  uint64    `gorm:"not null;uniqueIndex:uniq_family_name" json:"family_id"`
+    Name      string    `gorm:"size:64;not null;uniqueIndex:uniq_family_name" json:"name"`
+    UnitKind  string    `gorm:"type:enum('money','time','points','custom');not null" json:"unit_kind"`
+    UnitLabel string    `gorm:"size:32" json:"unit_label,omitempty"`
+    CreatedAt time.Time `json:"created_at"`
+    UpdatedAt time.Time `json:"updated_at"`
+    
+    Family Family `gorm:"foreignKey:FamilyID" json:"family,omitempty"`
 }
 
 type Account struct {
-	ID           uint64    `gorm:"primaryKey;autoIncrement" json:"id"`
-	FamilyID     uint64    `gorm:"not null;index" json:"family_id"`
-	ChildID      uint64    `gorm:"not null;index" json:"child_id"`
-	RewardTypeID uint64    `gorm:"not null;index" json:"reward_type_id"`
-	Balance      int64     `gorm:"default:0;not null" json:"balance"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
-	
-	Child      User       `gorm:"foreignKey:ChildID" json:"child,omitempty"`
-	RewardType RewardType `gorm:"foreignKey:RewardTypeID" json:"reward_type,omitempty"`
-	
-	gorm:"uniqueIndex:uniq_acc,composite:(child_id,reward_type_id)"
+    ID           uint64    `gorm:"primaryKey;autoIncrement" json:"id"`
+    FamilyID     uint64    `gorm:"not null;index" json:"family_id"`
+    ChildID      uint64    `gorm:"not null;uniqueIndex:uniq_acc" json:"child_id"`
+    RewardTypeID uint64    `gorm:"not null;uniqueIndex:uniq_acc" json:"reward_type_id"`
+    Balance      int64     `gorm:"default:0;not null" json:"balance"`
+    CreatedAt    time.Time `json:"created_at"`
+    UpdatedAt    time.Time `json:"updated_at"`
+    
+    Child      User       `gorm:"foreignKey:ChildID" json:"child,omitempty"`
+    RewardType RewardType `gorm:"foreignKey:RewardTypeID" json:"reward_type,omitempty"`
 }
 
 type Transaction struct {

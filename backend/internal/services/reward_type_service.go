@@ -1,8 +1,7 @@
 package services
 
 import (
-	"reward-system/internal/db"
-	"gorm.io/gorm"
+    "reward-system/internal/db"
 )
 
 func (s *RewardService) CreateRewardType(rewardType *db.RewardType) error {

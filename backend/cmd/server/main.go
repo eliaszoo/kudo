@@ -15,17 +15,21 @@ func main() {
 		log.Println("No .env file found, using environment variables")
 	}
 
-	cfg := &config.Config{
-		DBDSN:      os.Getenv("DB_DSN"),
-		WechatToken: os.Getenv("WECHAT_TOKEN"),
-		APIToken:   os.Getenv("API_TOKEN"),
-		MCPURL:     os.Getenv("MCP_SERVER_URL"),
-		Port:       os.Getenv("PORT"),
-	}
+    cfg := &config.Config{
+        DBDSN:      os.Getenv("DB_DSN"),
+        WechatToken: os.Getenv("WECHAT_TOKEN"),
+        APIToken:   os.Getenv("API_TOKEN"),
+        MCPURL:     os.Getenv("MCP_SERVER_URL"),
+        Port:       os.Getenv("PORT"),
+    }
 
-	if cfg.Port == "" {
-		cfg.Port = "8080"
-	}
+    if cfg.Port == "" {
+        cfg.Port = "8080"
+    }
+
+    if cfg.APIToken == "" {
+        cfg.APIToken = "demo-token"
+    }
 
 	database, err := db.InitDB(cfg.DBDSN)
 	if err != nil {

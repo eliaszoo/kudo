@@ -1,13 +1,14 @@
 package main
 
 import (
-	"database/sql"
-	"fmt"
-	"log"
-	"os"
+    "database/sql"
+    "fmt"
+    "log"
+    "os"
+    "strings"
 
-	"github.com/go-sql-driver/mysql"
-	"github.com/joho/godotenv"
+    _ "github.com/go-sql-driver/mysql"
+    "github.com/joho/godotenv"
 )
 
 // Migration represents a database migration
@@ -19,11 +20,11 @@ type Migration struct {
 var migrations = []Migration{
 	{
 		Name: "001_initial_schema",
-		SQL:  readMigrationFile("001_initial_schema.sql"),
+		SQL:  readMigrationFile("migrations/001_initial_schema.sql"),
 	},
 	{
 		Name: "002_test_data",
-		SQL:  readMigrationFile("002_test_data.sql"),
+		SQL:  readMigrationFile("migrations/002_test_data.sql"),
 	},
 }
 
@@ -44,7 +45,7 @@ func main() {
 	// Get database connection string
 	dsn := os.Getenv("DB_DSN")
 	if dsn == "" {
-		dsn = "root:password@tcp(localhost:3306)/reward_system?charset=utf8mb4&parseTime=True&loc=Local"
+		dsn = "root:@tcp(localhost:3306)/reward_system?charset=utf8mb4&parseTime=True&loc=Local"
 	}
 
 	// Connect to database
@@ -86,7 +87,7 @@ func createMigrationsTable(db *sql.DB) error {
 }
 
 func runMigrations(db *sql.DB) error {
-	for _, migration := range migrations {
+    for _, migration := range migrations {
 		// Check if migration already applied
 		var count int
 		err := db.QueryRow("SELECT COUNT(*) FROM schema_migrations WHERE version = ?", migration.Name).Scan(&count)
@@ -101,11 +102,16 @@ func runMigrations(db *sql.DB) error {
 
 		log.Printf("Applying migration: %s", migration.Name)
 
-		// Execute migration
-		_, err = db.Exec(migration.SQL)
-		if err != nil {
-			return fmt.Errorf("failed to apply migration %s: %v", migration.Name, err)
-		}
+        // Execute migration statements sequentially
+        statements := splitSQLStatements(migration.SQL)
+        for _, stmt := range statements {
+            if stmt == "" {
+                continue
+            }
+            if _, err = db.Exec(stmt); err != nil {
+                return fmt.Errorf("failed to apply migration %s: %v", migration.Name, err)
+            }
+        }
 
 		// Record migration as applied
 		_, err = db.Exec("INSERT INTO schema_migrations (version) VALUES (?)", migration.Name)
@@ -117,4 +123,38 @@ func runMigrations(db *sql.DB) error {
 	}
 
 	return nil
+}
+
+// splitSQLStatements splits a migration file into individual SQL statements.
+// It removes line comments (--) and ignores DELIMITER directives.
+func splitSQLStatements(sqlText string) []string {
+    // Normalize line endings
+    sqlText = strings.ReplaceAll(sqlText, "\r\n", "\n")
+    sqlText = strings.ReplaceAll(sqlText, "\r", "\n")
+
+    // Remove DELIMITER lines
+    lines := strings.Split(sqlText, "\n")
+    var b strings.Builder
+    for _, line := range lines {
+        trimmed := strings.TrimSpace(line)
+        if strings.HasPrefix(trimmed, "--") { // skip comments
+            continue
+        }
+        if strings.HasPrefix(strings.ToUpper(trimmed), "DELIMITER") { // skip delimiter directives
+            continue
+        }
+        b.WriteString(line)
+        b.WriteString("\n")
+    }
+
+    // Split by semicolons
+    raw := strings.Split(b.String(), ";")
+    var out []string
+    for _, s := range raw {
+        st := strings.TrimSpace(s)
+        if st != "" {
+            out = append(out, st)
+        }
+    }
+    return out
 }

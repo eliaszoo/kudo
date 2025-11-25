@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useFamilyStore } from '../stores/familyStore'
+import { api } from '../stores/familyStore'
 import { TrendingUp, TrendingDown, Calendar, User } from 'lucide-react'
 
 interface Transaction {
@@ -12,36 +14,33 @@ interface Transaction {
 }
 
 export default function Transactions() {
-  const { users, rewardTypes, loading } = useFamilyStore()
+  const { users, rewardTypes, loading, currentFamily } = useFamilyStore()
+  const location = useLocation()
   const [transactions, setTransactions] = useState<Transaction[]>([])
-  const [filters, setFilters] = useState({
-    child_id: '',
-    reward_type_id: '',
-    type: '',
-  })
+  const [filters, setFilters] = useState({ child_id: '', type: '' })
 
   useEffect(() => {
-    // Mock transactions data
-    const mockTransactions: Transaction[] = [
-      {
-        id: 1,
-        type: 'credit',
-        value: 10000,
-        note: '完成作业',
-        created_at: new Date().toISOString(),
-        account_id: 1,
-      },
-      {
-        id: 2,
-        type: 'debit',
-        value: 5000,
-        note: '买文具',
-        created_at: new Date(Date.now() - 86400000).toISOString(),
-        account_id: 1,
-      },
-    ]
-    setTransactions(mockTransactions)
-  }, [])
+    const params = new URLSearchParams(location.search)
+    const childId = params.get('child_id') || ''
+    if (childId) setFilters(f => ({ ...f, child_id: childId }))
+  }, [location.search])
+
+  useEffect(() => {
+    const load = async () => {
+      const childId = filters.child_id || String(users.find(u => u.role === 'child')?.id || '')
+      if (!currentFamily?.id || !childId) return
+      try {
+        const res = await api.get('/transactions', {
+          params: { family_id: currentFamily.id, child_id: childId, limit: 50 },
+        })
+        const list: Transaction[] = res.data.data || []
+        setTransactions(list)
+      } catch (e) {
+        // ignore
+      }
+    }
+    load()
+  }, [currentFamily, users, filters.child_id])
 
   const getTypeIcon = (type: string) => {
     return type === 'credit' ? 
@@ -103,21 +102,7 @@ export default function Transactions() {
             </select>
           </div>
           
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              奖励类型
-            </label>
-            <select
-              value={filters.reward_type_id}
-              onChange={(e) => setFilters({ ...filters, reward_type_id: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-            >
-              <option value="">全部类型</option>
-              {rewardTypes.map(type => (
-                <option key={type.id} value={type.id}>{type.name}</option>
-              ))}
-            </select>
-          </div>
+          {/* 奖励类型筛选暂不联动后端，保留占位但不影响查询 */}
           
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -159,9 +144,7 @@ export default function Transactions() {
         ) : (
           <div className="divide-y divide-gray-200">
             {filteredTransactions.map((transaction) => {
-              const child = users.find(u => u.role === 'child')
-              const rewardType = rewardTypes[0] // Mock for now
-              
+              const child = users.find(u => u.role === 'child' && (filters.child_id ? String(u.id) === filters.child_id : true))
               return (
                 <div key={transaction.id} className="px-6 py-4 hover:bg-gray-50">
                   <div className="flex items-center justify-between">
@@ -183,9 +166,6 @@ export default function Transactions() {
                             <User className="h-3 w-3" />
                             <span>{child?.display_name || '未知'}</span>
                           </div>
-                          <div className="flex items-center space-x-1">
-                            <span>{rewardType?.name || '未知类型'}</span>
-                          </div>
                           {transaction.note && (
                             <div className="text-gray-500">
                               备注: {transaction.note}
@@ -194,7 +174,6 @@ export default function Transactions() {
                         </div>
                       </div>
                     </div>
-                    
                     <div className="text-right">
                       <div className="text-sm text-gray-600 flex items-center">
                         <Calendar className="h-3 w-3 mr-1" />

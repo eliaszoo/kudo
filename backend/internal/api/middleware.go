@@ -1,9 +1,7 @@
 package api
 
 import (
-	"time"
-
-	"github.com/gin-gonic/gin"
+    "github.com/gin-gonic/gin"
 )
 
 func CORSMiddleware() gin.HandlerFunc {
